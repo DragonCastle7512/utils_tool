@@ -1,3 +1,7 @@
+from dotenv import load_dotenv
+# .env 파일로부터 환경 변수 로드
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers.sessions import router as sessions_router

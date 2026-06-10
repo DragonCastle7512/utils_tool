@@ -35,8 +35,11 @@ class AgentOrchestrator:
     @property
     def client(self):
         if self._client is None:
-            # api_key가 None인 경우, genai.Client가 자동으로 GEMINI_API_KEY 환경 변수를 조회함
-            self._client = genai.Client(api_key=self.api_key)
+            # api_key가 제공된 경우에만 인자로 주입하고, 없으면 환경변수(GEMINI_API_KEY)를 사용하도록 인자 없이 호출
+            if self.api_key:
+                self._client = genai.Client(api_key=self.api_key)
+            else:
+                self._client = genai.Client()
         return self._client
 
     def _extract_json(self, text: str) -> dict:
