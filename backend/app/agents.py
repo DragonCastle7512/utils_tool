@@ -25,7 +25,7 @@ class DesignSchema(BaseModel):
 
 
 class AgentOrchestrator:
-    def __init__(self, api_key: str = None, chat_model: str = "gemini-3.1-flash-lite", design_model: str = "gemini-3.1-flash-lite"):
+    def __init__(self, api_key: str = None, chat_model: str = "gemma-4-26b-a4b-it", design_model: str = "gemma-4-26b-a4b-it"):
         self.api_key = api_key
         self.chat_model = chat_model
         self.design_model = design_model
@@ -143,15 +143,44 @@ class AgentOrchestrator:
         }
 
         prompt = (
-            "당신은 뛰어난 전문 프론트엔드 개발 에이전트입니다. "
-            "다음 기획 명세서를 참고하여 완성도 높고 미려한 웹사이트의 소스코드 파일들을 작성해 주세요.\n\n"
-            f"기획 명세서: {summary}\n"
-            f"타겟 프레임워크: {framework}\n\n"
-            "요구사항:\n"
-            "1. 세련되고 트렌디한 모던 디자인을 적용하세요 (HSL 컬러 배합, 그라데이션, 부드러운 호버 애니메이션 및 트랜지션 활용).\n"
-            "2. 실무 수준의 깔끔하고 구조화된 코드를 작성하십시오.\n"
-            "3. 텍스트 플레이스홀더를 사용하지 말고 실제 사이트 테마에 어울리는 실감나는 한국어 문구와 내용으로 가득 채우십시오.\n"
-            f"4. 프레임워크 제약사항: {framework_instructions.get(framework, framework_instructions['vanilla'])}\n"
+            "당신은 실무 경력 10년 이상의 수석 프론트엔드 UI/UX 엔지니어이자 최고 수준의 디지털 디자이너 에이전트입니다. "
+            "단순하고 뻔한 인공지능 스타일의 양산형 UI 디자인(하얀 배경에 보라색 그라데이션 카드 그리드, 획일화된 레이아웃 등)을 극도로 지양하며, "
+            "독창적이고 완성도 높은 최상급의 프론트엔드 코드셋을 작성해야 합니다.\n\n"
+            
+            f"[기획 명세서]:\n{summary}\n"
+            f"[타겟 프레임워크]: {framework}\n\n"
+            
+            "웹사이트 생성 시 반드시 준수해야 하는 [디자인 및 엔지니어링 지침]:\n\n"
+            
+            "1. 컨셉추얼한 비주얼 테마 설정 (Aesthetic Point-of-View)\n"
+            "   - 명세서의 주제에 가장 어울리는 과감하고 독창적인 디자인 스타일을 하나 선택해 일관성 있게 구현하세요.\n"
+            "   - 디자인 스타일 예시: 미니멀리즘(Brutally Minimal), 레트로 퓨처리즘(Retro-futuristic), 편집샵 잡지 레이아웃(Editorial/Magazine), 오가닉/내추럴(Organic/Natural), 프리미엄 하이엔드/럭셔리(Luxury/Refined), 인더스트리얼(Industrial/Utilitarian) 등.\n"
+            "   - 모든 색상, 경계선 둥글기(border-radius), 여백 비율은 선택한 컨셉의 톤앤매너에 맞게 정밀하게 조정하세요.\n\n"
+            
+            "2. 타이포그래피 설계 및 폰트 페어링 (Typography)\n"
+            "   - 브라우저 기본 폰트나 단순 Inter, Arial 같은 식상한 폰트를 쓰지 마세요.\n"
+            "   - Google Fonts에서 제목용 개성 있는 디스플레이/세리프 폰트(예: Playfair Display, Cormorant Garamond, Syne, Space Grotesk, Cabinet Grotesk, DM Serif 등)와 본문용 가독성 좋은 산세리프 폰트를 CSS `@import` 또는 `<link>` 태그로 로드하여 조합해 사용하세요.\n"
+            "   - 글자 크기(Heading 1~6, Body, Small)의 위계질서(Hierarchy)를 뚜렷하게 설정하세요.\n\n"
+            
+            "3. 레이아웃의 입체감과 깊이 설계 (Layout & Visual Depth)\n"
+            "   - 평평하고 심심한 단색 배경 대신, CSS 그라데이션 메쉬(Gradient Mesh), 미세한 미디엄 노이즈 효과, 그리드 패턴 배경, 투명 레이어링(backdrop-filter: blur), 입체적인 그림자(dramatic box-shadows) 등을 사용해 고급스러운 분위기를 연출하세요.\n"
+            "   - 뻔한 카드 격자 배열을 피하고, 비대칭 배치(Asymmetry), 겹침 효과(Overlap), 대각선 흐름(Diagonal Flow), 그리드를 살짝 벗어나는 요소들을 도입해 리듬감 있는 배치를 구성하세요.\n\n"
+            
+            "4. 모션 및 인터랙션 디테일 (Motion & Micro-interactions)\n"
+            "   - 웹페이지 로드 시 요소들이 시간 차(animation-delay)를 두고 서서히 떠오르는 스태거드 페이드인(Staggered reveal) CSS 애니메이션을 적용하세요.\n"
+            "   - 모든 버튼과 인터랙티브 요소에는 마우스를 올렸을 때 부드러운 스케일 변화, 컬러 페이딩, 화살표 밀림 등 매력적인 호버 상태를 부여하세요.\n\n"
+            
+            "5. 실무 수준의 시맨틱 마크업 및 접근성 (Semantic HTML & Engineering)\n"
+            "   - 의미 있는 HTML5 시맨틱 태그(<header>, <nav>, <main>, <section>, <article>, <footer>)를 올바르게 계층화해 작성하세요.\n"
+            "   - 320px(모바일)부터 768px(태블릿), 1024px, 1440px(데스크톱)까지 레이아웃이 깨지지 않고 부드럽게 반응하는 완전 반응형 웹 디자인을 구성하세요.\n"
+            "   - 임의의 픽셀값(예: 13px, 29px)을 남발하지 말고 4px/8px 배수 단위(0.25rem, 0.5rem, 1rem 등)의 규칙적인 Spacing Scale을 유지하세요.\n"
+            "   - 스크린 리더와 키보드 접근성을 위해 적합한 ARIA 어트리뷰트(aria-label, role)를 지정하세요.\n\n"
+            
+            "6. 텍스트 플레이스홀더 배제 및 가독성 높은 콘텐츠\n"
+            "   - 'Lorem Ipsum'이나 '여기에 텍스트 입력'과 같은 무의미한 플레이스홀더를 절대 사용하지 마세요.\n"
+            "   - 생성 대상 서비스의 비즈니스 목적에 완벽하게 부합하고, 기획 감성을 자극하는 실감나고 전문적인 **한국어 카피라이팅** 문구들로 모든 텍스트를 정성스레 채워 넣으십시오.\n\n"
+            
+            f"[프레임워크별 소스코드 구조화 제약사항]:\n{framework_instructions.get(framework, framework_instructions['vanilla'])}\n"
         )
 
         try:
