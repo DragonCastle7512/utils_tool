@@ -59,16 +59,22 @@ def test_generate_design(mock_genai_client_class, orchestrator):
     mock_client = MagicMock()
     mock_genai_client_class.return_value = mock_client
     
-    # 가상 코드 파일 및 프리뷰 HTML 생성 응답 모킹
+    # 가상 코드 파일 및 프리뷰 HTML 생성 마크다운 응답 모킹
     mock_response = MagicMock()
-    mock_response.text = '''{
-        "framework": "react",
-        "files": [
-            {"path": "src/App.jsx", "content": "export default function App() { return <h1>핑크 쇼핑몰</h1>; }"}
-        ],
-        "preview_html": "<h1>핑크 쇼핑몰</h1>",
-        "summary": "러블리 핑크 쇼핑몰 완성본"
-    }'''
+    mock_response.text = '''
+[FRAMEWORK]: react
+[SUMMARY]: 러블리 핑크 쇼핑몰 완성본
+
+[FILE]: src/App.jsx
+```jsx
+export default function App() { return <h1>핑크 쇼핑몰</h1>; }
+```
+
+[FILE]: preview.html
+```html
+<h1>핑크 쇼핑몰</h1>
+```
+'''
     mock_client.models.generate_content.return_value = mock_response
     
     design = orchestrator.generate_design("리액트 기반 쇼핑몰, 핑크 테마, 메인페이지 3개 섹션 구성", "react")
