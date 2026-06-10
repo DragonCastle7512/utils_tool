@@ -5,27 +5,14 @@ from pydantic import BaseModel, Field, ConfigDict
 from google import genai
 from google.genai import types
 
-# Gemini 구조화된 출력을 위한 Pydantic 스키마 정의
+# 기획 완료 여부 판단용 스키마 (대화 내역은 짧으므로 JSON 구조화 출력이 매우 안정적임)
 class ReadinessSchema(BaseModel):
     is_ready: bool = Field(description="사용자의 기획 요구사항이 웹사이트 코드를 생성하기에 충분히 구체적인 경우 True, 아직 대화가 더 필요한 경우 False")
     summary: str = Field(description="완료된 경우(is_ready가 True인 경우) 웹사이트의 구조, 테마 색상, 구성 요소 등을 요약한 기획 명세서 정보. 완료되지 않은 경우 빈 문자열")
 
-class CodeFile(BaseModel):
-    path: str = Field(description="소스코드 파일의 상대 경로 (예: index.html, src/App.jsx, src/index.css)")
-    content: str = Field(description="해당 소스코드 파일의 전체 내용")
-
-class DesignSchema(BaseModel):
-    framework: str = Field(description="사용자가 요청했거나 가장 적합한 프레임워크 명칭 (vanilla, react, vue)")
-    files: List[CodeFile] = Field(description="웹사이트를 구성하는 소스코드 파일 목록")
-    preview_html: List[str] = Field(default=[], description="호환성을 위한 미사용 필드 또는 preview_html 문자열 예비 필드")
-    preview_html_str: str = Field(alias="preview_html", description="iframe 내에서 실시간으로 직접 렌더링이 가능한 단일 HTML 소스코드 (스타일과 스크립트가 모두 포함된 완성형 페이지)")
-    summary: str = Field(description="생성된 웹사이트 디자인 및 기능에 대한 간략한 요약 설명")
-
-    model_config = ConfigDict(populate_by_name=True)
-
 
 class AgentOrchestrator:
-    def __init__(self, api_key: str = None, chat_model: str = "gemma-4-26b-a4b-it", design_model: str = "gemma-4-26b-a4b-it"):
+    def __init__(self, api_key: str = None, chat_model: str = "gemini-3.1-flash-lite", design_model: str = "gemma-4-26b-a4b-it"):
         self.api_key = api_key
         self.chat_model = chat_model
         self.design_model = design_model
@@ -45,7 +32,6 @@ class AgentOrchestrator:
     def _extract_json(self, text: str) -> dict:
         """구조화된 출력이 마크다운 태그 등에 감싸여 온 경우를 대비해 JSON 블록만 추출하는 파서"""
         text = text.strip()
-        # 최초의 '{'와 마지막 '}' 사이의 텍스트 매칭
         match = re.search(r'\{.*\}', text, re.DOTALL)
         if match:
             try:
@@ -53,6 +39,58 @@ class AgentOrchestrator:
             except json.JSONDecodeError:
                 pass
         return json.loads(text)
+
+    def _parse_markdown_design(self, text: str, default_framework: str = "vanilla") -> dict:
+        """디자인 에이전트의 마크다운 텍스트 응답으로부터 가상 파일 트리 및 프리뷰 코드를 파싱하는 유틸리티"""
+        # 1. 프레임워크 파싱 ([FRAMEWORK]: react 형식 추출)
+        framework = default_framework
+        framework_match = re.search(r'\[FRAMEWORK\]:\s*([^\n]+)', text)
+        if framework_match:
+            framework = framework_match.group(1).strip().lower()
+            if framework not in ["vanilla", "react", "vue"]:
+                framework = default_framework
+                
+        # 2. 요약 정보 파싱 ([SUMMARY]: 요약 내용 형식 추출)
+        summary = ""
+        summary_match = re.search(r'\[SUMMARY\]:\s*([^\n]+)', text)
+        if summary_match:
+            summary = summary_match.group(1).strip()
+            
+        # 3. 소스코드 파일 추출 ([FILE]: 경로명 형식을 찾고 바로 뒤따르는 백틱 마크다운 코드 블록 파싱)
+        # 패턴: [FILE]: 경로명\n```언어\n코드내용\n```
+        file_pattern = r'\[FILE\]:\s*([^\n]+)\s*\n```[a-zA-Z0-9_-]*\n(.*?)\n```'
+        files_matches = re.findall(file_pattern, text, re.DOTALL)
+        
+        files = []
+        preview_html = ""
+        
+        for path, content in files_matches:
+            path = path.strip()
+            content = content.strip()
+            files.append({
+                "path": path,
+                "content": content
+            })
+            
+            # 프리뷰용 HTML 결정 규칙:
+            # 1. 프리뷰 전용 파일인 'preview.html'이 정의되어 있다면 그것을 사용
+            # 2. Vanilla 프레임워크이면서 index.html 파일이라면 그것을 사용
+            if path == "preview.html" or (framework == "vanilla" and path == "index.html"):
+                preview_html = content
+
+        # 만약 preview_html을 명시적으로 찾지 못한 경우, 파일 목록 중 최초로 발견되는 HTML 파일을 사용
+        if not preview_html:
+            for f in files:
+                if f["path"].endswith(".html"):
+                    preview_html = f["content"]
+                    break
+                    
+        return {
+            "framework": framework,
+            "files": files,
+            "preview_html": preview_html,
+            "summary": summary
+        }
 
     def get_chat_response(self, chat_history: List[Dict[str, str]]) -> str:
         """메인 에이전트를 호출하여 사용자와 대화를 이어가며 기획을 정교화함"""
@@ -63,7 +101,6 @@ class AgentOrchestrator:
             "요구사항이 모두 정리되었다고 판단되면, 모든 정보가 준비되었으며 이제 웹사이트 디자인 및 코드 생성을 시작하겠다고 사용자에게 안내하십시오."
         )
 
-        # 단순 딕셔너리 히스토리를 Gemini SDK Content 객체 리스트로 변환
         contents = []
         for chat in chat_history:
             role = "user" if chat["role"] == "user" else "model"
@@ -85,7 +122,6 @@ class AgentOrchestrator:
             )
             return response.text
         except Exception as e:
-            # 테스트 환경 또는 호출 실패 시의 대체 텍스트 반환
             return f"채팅 모델 호출 중 오류가 발생했습니다: {str(e)}"
 
     def evaluate_readiness(self, chat_history: List[Dict[str, str]]) -> Tuple[bool, str]:
@@ -114,7 +150,6 @@ class AgentOrchestrator:
             data = self._extract_json(response.text)
             return bool(data.get("is_ready", False)), data.get("summary", "")
         except Exception as e:
-            # 스키마 연동 오류 시 대체 동작 지원
             try:
                 data = self._extract_json(response.text)
                 return bool(data.get("is_ready", False)), data.get("summary", "")
@@ -122,30 +157,44 @@ class AgentOrchestrator:
                 return False, ""
 
     def generate_design(self, summary: str, framework: str = "vanilla") -> dict:
-        """디자인 에이전트를 호출하여 가상 소스코드 파일 및 iframe용 프리뷰 HTML을 한글 기준으로 작성"""
+        """디자인 에이전트를 호출하여 가상 소스코드 파일 및 iframe용 프리뷰 HTML을 마크다운 포맷으로 안정적으로 작성"""
         framework_instructions = {
             "vanilla": (
                 "기본적인 HTML/CSS/JS 웹사이트를 생성하십시오. "
-                "files 목록에는 최소한 index.html, style.css, script.js 파일이 포함되어야 합니다. "
-                "preview_html은 iframe에서 즉시 단독으로 실행될 수 있도록 모든 스타일과 스크립트가 인라인(<style>, <script> 태그)으로 결합된 완성된 단일 HTML 문서 스트링이어야 합니다."
+                "생성할 파일 목록에는 index.html, style.css, script.js 가 포함되어야 합니다. "
+                "또한, 반드시 preview.html 이라는 파일 경로를 하나 더 만들고, 여기에 index.html을 기반으로 모든 스타일(CSS)과 스크립트(JS)가 단일 파일로 결합된 완성형 프리뷰용 코드를 담아주세요."
             ),
             "react": (
                 "Vite 스타일의 React 웹사이트 소스코드를 생성하십시오. "
-                "files 목록에는 src/App.jsx, src/index.css, index.html 등 필요한 모든 소스 파일이 포함되어야 합니다. "
-                "preview_html은 iframe 내에서 React 코드의 레이아웃과 동작이 정상적으로 표시될 수 있도록 배포용 형태로 합쳐진 단일 HTML 문서 스트링이어야 합니다. "
-                "동작에 필요한 라이브러리가 있다면 CDN 주소를 활용하여 독립 실행이 가능하도록 작성하십시오."
+                "생성할 파일 목록에는 src/App.jsx, src/index.css, index.html 등이 포함되어야 합니다. "
+                "또한, 반드시 preview.html 이라는 파일 경로를 하나 더 만들고, 여기에 리액트 컴포넌트 구조의 비주얼 레이아웃과 동작을 단일 HTML 페이지로 모방/인라인 컴파일한 프리뷰 코드를 완성하여 작성해 주십시오."
             ),
             "vue": (
                 "Vue 3 Single File Component (SFC) 스타일의 프로젝트 소스코드를 생성하십시오. "
-                "files 목록에는 src/App.vue, index.html, src/main.js 등 구성에 필요한 파일들이 포함되어야 합니다. "
-                "preview_html은 CDN을 통해 Vue 라이브러리를 가져와 렌더링하는 형태로 작성하여 iframe에서 독립적으로 작동하도록 하십시오."
+                "생성할 파일 목록에는 src/App.vue, index.html, src/main.js 등이 포함되어야 합니다. "
+                "또한, 반드시 preview.html 이라는 파일 경로를 하나 더 만들고, CDN을 통해 Vue를 바인딩하여 브라우저에서 독립 실행이 가능한 프리뷰용 단일 HTML 문서를 작성해 주십시오."
             )
         }
 
         prompt = (
             "당신은 실무 경력 10년 이상의 수석 프론트엔드 UI/UX 엔지니어이자 최고 수준의 디지털 디자이너 에이전트입니다. "
-            "단순하고 뻔한 인공지능 스타일의 양산형 UI 디자인(하얀 배경에 보라색 그라데이션 카드 그리드, 획일화된 레이아웃 등)을 극도로 지양하며, "
-            "독창적이고 완성도 높은 최상급의 프론트엔드 코드셋을 작성해야 합니다.\n\n"
+            "사용자가 기획한 명세서를 바탕으로 아주 미려하고 완성도 높은 웹사이트 코드를 생성해야 합니다.\n"
+            "구조화 에러를 방지하고 긴 소스코드를 온전히 다 작성하기 위해, 결과는 JSON 형식이 아니라 **아래 양식의 마크다운 텍스트 포맷**으로 출력해 주십시오.\n\n"
+            
+            "--- 출력 포맷 요구사항 (이 형식을 엄격히 준수하세요) ---\n"
+            "[FRAMEWORK]: {framework}\n"
+            "[SUMMARY]: 생성된 웹사이트에 대한 한글 요약 설명\n\n"
+            
+            "[FILE]: 파일_상대_경로_1\n"
+            "```확장자\n"
+            "소스코드 내용 (생략 없이 전체 작성)\n"
+            "```\n\n"
+            
+            "[FILE]: 파일_상대_경로_2\n"
+            "```확장자\n"
+            "소스코드 내용 (생략 없이 전체 작성)\n"
+            "```\n"
+            "---------------------------------------------------\n\n"
             
             f"[기획 명세서]:\n{summary}\n"
             f"[타겟 프레임워크]: {framework}\n\n"
@@ -180,6 +229,10 @@ class AgentOrchestrator:
             "   - 'Lorem Ipsum'이나 '여기에 텍스트 입력'과 같은 무의미한 플레이스홀더를 절대 사용하지 마세요.\n"
             "   - 생성 대상 서비스의 비즈니스 목적에 완벽하게 부합하고, 기획 감성을 자극하는 실감나고 전문적인 **한국어 카피라이팅** 문구들로 모든 텍스트를 정성스레 채워 넣으십시오.\n\n"
             
+            "7. 코드 생략 및 축약 절대 금지 (Strict No-Ellipsis Policy)\n"
+            "   - 절대로 코드 중간에 '// ... 생략' 또는 '// 기존 코드 동일', '/* 스타일 생략 */' 같은 주석으로 코드를 축약해서는 안 됩니다.\n"
+            "   - 모든 파일의 기능, HTML 구조, CSS 스타일 시트, 자바스크립트 스크립트의 전 라인을 처음부터 끝까지 100% 온전한 코드로 빈틈없이 작성해 주십시오. 생략 표기가 단 한 군데라도 있을 시 에러로 간주됩니다.\n\n"
+            
             f"[프레임워크별 소스코드 구조화 제약사항]:\n{framework_instructions.get(framework, framework_instructions['vanilla'])}\n"
         )
 
@@ -188,31 +241,19 @@ class AgentOrchestrator:
                 model=self.design_model,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=DesignSchema,
-                    temperature=0.2
+                    temperature=0.2,
                 )
             )
-            data = self._extract_json(response.text)
-            return {
-                "framework": data.get("framework", framework),
-                "files": data.get("files", []),
-                "preview_html": data.get("preview_html", ""),
-                "summary": data.get("summary", "")
-            }
+            # 마크다운 응답을 파싱하여 가상 파일 트리 구조로 반환
+            return self._parse_markdown_design(response.text, default_framework=framework)
         except Exception as e:
-            try:
-                data = self._extract_json(response.text)
-                return {
-                    "framework": data.get("framework", framework),
-                    "files": data.get("files", []),
-                    "preview_html": data.get("preview_html", ""),
-                    "summary": data.get("summary", "")
-                }
-            except Exception:
-                return {
-                    "framework": framework,
-                    "files": [{"path": "index.html", "content": f"<h1>디자인 생성 중 오류가 발생했습니다: {str(e)}</h1>"}],
-                    "preview_html": f"<h1>디자인 생성 중 오류가 발생했습니다: {str(e)}</h1>",
-                    "summary": f"생성 실패: {str(e)}"
-                }
+            import traceback
+            print(f"\n[에러 발생] 디자인 생성 실패 (모델: {self.design_model}): {str(e)}")
+            traceback.print_exc()
+            # 예외 발생 시 기본 폴백 구조 반환
+            return {
+                "framework": framework,
+                "files": [{"path": "index.html", "content": f"<h1>디자인 생성 중 오류가 발생했습니다: {str(e)}</h1>"}],
+                "preview_html": f"<h1>디자인 생성 중 오류가 발생했습니다: {str(e)}</h1>",
+                "summary": f"생성 실패: {str(e)}"
+            }
