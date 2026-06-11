@@ -82,3 +82,39 @@ export default function App() { return <h1>핑크 쇼핑몰</h1>; }
     assert design["framework"] == "react"
     assert design["files"][0]["path"] == "src/App.jsx"
     assert "핑크 쇼핑몰" in design["preview_html"]
+
+@patch("app.agents.genai.Client")
+def test_review_and_correct_design(mock_genai_client_class, orchestrator):
+    mock_client = MagicMock()
+    mock_genai_client_class.return_value = mock_client
+    
+    mock_response = MagicMock()
+    mock_response.text = '''
+[FRAMEWORK]: react
+[SUMMARY]: 러블리 핑크 쇼핑몰 완성본 (검토 완료)
+
+[FILE]: src/App.jsx
+```jsx
+export default function App() { return <h1>핑크 쇼핑몰 (검토 완료)</h1>; }
+```
+
+[FILE]: preview.html
+```html
+<h1>핑크 쇼핑몰 (검토 완료)</h1>
+```
+'''
+    mock_client.models.generate_content.return_value = mock_response
+    
+    initial_design = {
+        "framework": "react",
+        "files": [
+            {"path": "src/App.jsx", "content": "export default function App() { return <h1>핑크 쇼핑몰</h1>; }"},
+            {"path": "preview.html", "content": "<h1>핑크 쇼핑몰</h1>"}
+        ]
+    }
+    
+    corrected_design = orchestrator.review_and_correct_design(initial_design, "리액트 기반 쇼핑몰, 핑크 테마, 메인페이지 3개 섹션 구성")
+    
+    assert corrected_design["framework"] == "react"
+    assert corrected_design["files"][0]["path"] == "src/App.jsx"
+    assert "핑크 쇼핑몰 (검토 완료)" in corrected_design["preview_html"]

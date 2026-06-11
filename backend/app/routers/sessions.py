@@ -102,8 +102,10 @@ def chat(session_id: str, req: ChatReq, db: DatabaseHelper = Depends(get_db)):
         existing_designs = db.get_designs(session_id)
         next_version = len(existing_designs) + 1
 
-        # 디자인 에이전트를 가동하여 소스코드 파일 트리 및 프리뷰용 단일 HTML 생성
-        generated_design = orchestrator.generate_design(summary, req.framework)
+        # 디자인 에이전트를 가동하여 1차 소스코드 파일 트리 생성
+        initial_design = orchestrator.generate_design(summary, req.framework)
+        # 검토 에이전트를 추가로 가동하여 최종 검토 및 디테일 보완 코드 생성
+        generated_design = orchestrator.review_and_correct_design(initial_design, summary)
 
         # DB 저장
         db.save_design(

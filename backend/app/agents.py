@@ -227,7 +227,8 @@ class AgentOrchestrator:
             
             "6. 텍스트 플레이스홀더 배제 및 가독성 높은 콘텐츠\n"
             "   - 'Lorem Ipsum'이나 '여기에 텍스트 입력'과 같은 무의미한 플레이스홀더를 절대 사용하지 마세요.\n"
-            "   - 생성 대상 서비스의 비즈니스 목적에 완벽하게 부합하고, 기획 감성을 자극하는 실감나고 전문적인 **한국어 카피라이팅** 문구들로 모든 텍스트를 정성스레 채워 넣으십시오.\n\n"
+            "   - 생성 대상 서비스의 비즈니스 목적에 완벽하게 부합하고, 기획 감성을 자극하는 실감나고 전문적인 문구들로 모든 텍스트를 정성스레 채워 넣으십시오.\n"
+            "   - 이모지를 남용하지말고, 세련된 아이콘 및 svg를 적극적으로 이용하세요.\n\n"
             
             "7. 코드 생략 및 축약 절대 금지 (Strict No-Ellipsis Policy)\n"
             "   - 절대로 코드 중간에 '// ... 생략' 또는 '// 기존 코드 동일', '/* 스타일 생략 */' 같은 주석으로 코드를 축약해서는 안 됩니다.\n"
@@ -257,3 +258,46 @@ class AgentOrchestrator:
                 "preview_html": f"<h1>디자인 생성 중 오류가 발생했습니다: {str(e)}</h1>",
                 "summary": f"생성 실패: {str(e)}"
             }
+
+    def review_and_correct_design(self, initial_design: dict, summary: str) -> dict:
+        """1차 생성된 디자인의 코드 오류를 검토하고 시각적 디테일을 정교하게 수정"""
+        # 생성된 파일들을 텍스트 포맷으로 변환
+        files_context = ""
+        for f in initial_design["files"]:
+            files_context += f"[FILE]: {f['path']}\n```\n{f['content']}\n```\n\n"
+
+        prompt = (
+            "당신은 최고 품질을 지향하는 웹 퍼블리싱 검토 및 코드 리팩토링 에이전트입니다.\n"
+            "디자인 에이전트가 생성한 아래의 1차 결과물을 분석하고, 다음 기준에 따라 코드를 개선 및 수정해 주세요:\n\n"
+            
+            "1. 레이아웃 및 CSS 검토:\n"
+            "   - Flexbox나 Grid 설정이 잘못되어 요소가 찌그러지거나 넘치는 현상(Overflow)이 없는지 확인하세요.\n"
+            "   - 반응형 미디어 쿼리(Media Query)가 누락되었거나 모바일 뷰포트(320px)에서 깨지는 부분이 있다면 완벽히 교정하세요.\n"
+            "2. 인터랙션 디테일 검토:\n"
+            "   - 모든 버튼과 마우스 오버(Hover)가 일어나는 인터랙티브 요소에 부드러운 transition 효과와 반응형 피드백을 강화하세요.\n"
+            "3. 디자인 토큰 검토:\n"
+            "   - 하드코딩된 색상 코드나 일관성 없는 여백 값을 찾아내어 공통 CSS 변수 사용으로 통일성 있게 리팩토링하세요.\n"
+            "4. 완결성 검토:\n"
+            "   - 절대로 코드 중간에 '// ... 생략'이나 주석 처리를 통한 스킵이 없어야 합니다. 모든 파일의 전체 코드를 빈틈없이 반환하세요.\n\n"
+            
+            f"[기획 명세서]:\n{summary}\n\n"
+            f"[1차 생성된 웹사이트 소스코드]:\n{files_context}\n"
+            f"[타겟 프레임워크]: {initial_design['framework']}\n\n"
+            
+            "개선 및 수정된 최종 코드를 이전과 동일한 마크다운 포맷([FRAMEWORK], [SUMMARY], [FILE] 태그)으로 출력해 주십시오."
+        )
+
+        try:
+            response = self.client.models.generate_content(
+                model=self.design_model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                )
+            )
+            return self._parse_markdown_design(response.text, default_framework=initial_design["framework"])
+        except Exception as e:
+            import traceback
+            print(f"\n[에러 발생] 디자인 검토 및 수정 실패 (모델: {self.design_model}): {str(e)}")
+            traceback.print_exc()
+            return initial_design
