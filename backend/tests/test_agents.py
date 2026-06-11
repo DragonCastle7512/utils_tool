@@ -118,3 +118,18 @@ export default function App() { return <h1>핑크 쇼핑몰 (검토 완료)</h1>
     assert corrected_design["framework"] == "react"
     assert corrected_design["files"][0]["path"] == "src/App.jsx"
     assert "핑크 쇼핑몰 (검토 완료)" in corrected_design["preview_html"]
+
+def test_inline_resources(orchestrator):
+    files = [
+        {"path": "style.css", "content": "body { background: black; }"},
+        {"path": "script.js", "content": "console.log('hello');"},
+        {"path": "index.html", "content": '<html><head><link rel="stylesheet" href="style.css"></head><body><h1>Test</h1><script src="script.js"></script></body></html>'}
+    ]
+    raw_html = files[2]["content"]
+    
+    inlined_html = orchestrator._inline_resources("vanilla", files, raw_html)
+    
+    assert "<style>\nbody { background: black; }\n</style>" in inlined_html
+    assert "<script>\nconsole.log('hello');\n</script>" in inlined_html
+    assert '<link rel="stylesheet"' not in inlined_html
+    assert 'src="script.js"' not in inlined_html

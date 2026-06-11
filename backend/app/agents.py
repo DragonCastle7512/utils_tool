@@ -85,12 +85,55 @@ class AgentOrchestrator:
                     preview_html = f["content"]
                     break
                     
+        # 상대 경로 리소스를 동적으로 인라인 처리하여 프리뷰 완성도 보장
+        preview_html = self._inline_resources(framework, files, preview_html)
+                    
         return {
             "framework": framework,
             "files": files,
             "preview_html": preview_html,
             "summary": summary
         }
+
+    def _inline_resources(self, framework: str, files: List[dict], raw_preview_html: str) -> str:
+        """HTML 내의 상대 경로 CSS/JS 파일 링크(<link>, <script src>)를 
+        생성된 가상 파일들의 내용으로 동적으로 인라인화하여 단일 HTML 문자열로 반환합니다."""
+        if not raw_preview_html:
+            return ""
+
+        html = raw_preview_html
+        
+        # 파일 목록을 경로를 키로 하는 dictionary로 변환 (경로의 './' 접두어 제거하여 일치율 증가)
+        file_map = {f["path"].strip("./"): f["content"] for f in files}
+
+        # 1. <link rel="stylesheet" href="..."> 및 변형 형태 매칭하여 인라인화
+        def replace_css_link(match):
+            tag = match.group(0)
+            # href 속성 찾기
+            href_match = re.search(r'href=["\']([^"\']+)["\']', tag)
+            if href_match:
+                href_path = href_match.group(1).strip("./")
+                if href_path in file_map:
+                    return f"<style>\n{file_map[href_path]}\n</style>"
+            return tag
+
+        # 다양한 순서의 <link> 태그 매칭 (href가 rel 앞에 오거나 뒤에 오는 경우 모두 지원)
+        html = re.sub(r'<link[^>]*rel=["\']stylesheet["\'][^>]*>', replace_css_link, html)
+        html = re.sub(r'<link[^>]*href=["\'][^"\']+["\'][^>]*rel=["\']stylesheet["\'][^>]*>', replace_css_link, html)
+
+        # 2. <script src="..."></script> 태그 매칭하여 인라인화
+        def replace_js_script(match):
+            tag = match.group(0)
+            src_match = re.search(r'src=["\']([^"\']+)["\']', tag)
+            if src_match:
+                src_path = src_match.group(1).strip("./")
+                if src_path in file_map:
+                    return f"<script>\n{file_map[src_path]}\n</script>"
+            return tag
+
+        html = re.sub(r'<script[^>]*src=["\']([^"\']+)["\'][^>]*>\s*</script>', replace_js_script, html)
+
+        return html
 
     def get_chat_response(self, chat_history: List[Dict[str, str]]) -> str:
         """메인 에이전트를 호출하여 사용자와 대화를 이어가며 기획을 정교화함"""
