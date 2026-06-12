@@ -11,6 +11,16 @@ class ReadinessSchema(BaseModel):
     summary: str = Field(description="완료된 경우(is_ready가 True인 경우) 웹사이트의 구조, 테마 색상, 구성 요소 등을 요약한 기획 명세서 정보. 완료되지 않은 경우 빈 문자열")
 
 
+def mark_planning_complete(summary: str) -> str:
+    """웹사이트 생성을 위한 기획이 최종적으로 완료되었을 때 호출합니다.
+    이 함수를 호출하면 기획 단계가 종료되고, 요약된 기획 스펙을 바탕으로 웹사이트 코드가 백그라운드에서 생성되기 시작합니다.
+
+    Args:
+        summary: 사용자와 조율을 완료한 웹사이트의 주제, 레이아웃, 컬러 테마, 주요 기능 등의 상세 요약 정보.
+    """
+    return "기획이 확정되어 웹사이트 생성을 시작합니다."
+
+
 class AgentOrchestrator:
     def __init__(self, api_key: str = None, chat_model: str = "gemini-3.1-flash-lite", design_model: str = "gemma-4-26b-a4b-it", review_model: str = "gemma-4-26b-a4b-it"):
         self.api_key = api_key
@@ -78,7 +88,7 @@ class AgentOrchestrator:
             # 2. Vanilla 프레임워크이면서 index.html 파일이라면 그것을 사용
             if path == "preview.html" or (framework == "vanilla" and path == "index.html"):
                 preview_html = content
-
+ 
         # 만약 preview_html을 명시적으로 찾지 못한 경우, 파일 목록 중 최초로 발견되는 HTML 파일을 사용
         if not preview_html:
             for f in files:
@@ -136,13 +146,14 @@ class AgentOrchestrator:
 
         return html
 
-    def get_chat_response(self, chat_history: List[Dict[str, str]]) -> str:
+    def get_chat_response(self, chat_history: List[Dict[str, str]]) -> Tuple[str, bool, str]:
         """메인 에이전트를 호출하여 사용자와 대화를 이어가며 기획을 정교화함"""
         system_instruction = (
             "당신은 AI 웹 빌더 서비스의 메인 기획 에이전트입니다. "
             "사용자와 대화하며 사용자가 원하는 웹사이트의 기획(목적, 구조, 디자인 레이아웃, 컬러 테마, 주요 섹션 및 기능 등)을 명확하게 다듬는 역할을 합니다. "
             "한 번에 1~2개씩 질문을 던져 사용자의 답변을 유도하고, 친절하고 전문적인 웹 기획자의 태도를 유지하세요. "
-            "요구사항이 모두 정리되었다고 판단되면, 모든 정보가 준비되었으며 이제 웹사이트 디자인 및 코드 생성을 시작하겠다고 사용자에게 안내하십시오."
+            "요구사항이 모두 정리되었다고 판단되면, 사용자의 별도 동의를 구하지 않고 즉시 mark_planning_complete 함수를 호출하여 기획 사양 요약을 제출하십시오. "
+            "그리고 동시에 사용자에게는 기획이 완료되어 디자인 및 코드 생성을 시작하겠다는 마지막 안내 메시지를 출력하세요."
         )
 
         contents = []
@@ -161,44 +172,30 @@ class AgentOrchestrator:
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
-                    temperature=0.7
+                    temperature=0.7,
+                    tools=[mark_planning_complete]
                 )
             )
-            return response.text
+            
+            is_ready = False
+            summary = ""
+            if response.function_calls:
+                for call in response.function_calls:
+                    if call.name == "mark_planning_complete":
+                        is_ready = True
+                        summary = call.args.get("summary", "")
+                        break
+            
+            reply = response.text
+            if not reply:
+                if is_ready:
+                    reply = "기획 요구사항이 모두 정리되었습니다. 즉시 웹사이트 디자인 및 코드 생성을 시작하겠습니다!"
+                else:
+                    reply = "대답을 생성하는 데 실패했습니다. 다시 말씀해 주세요."
+                    
+            return reply, is_ready, summary
         except Exception as e:
-            return f"채팅 모델 호출 중 오류가 발생했습니다: {str(e)}"
-
-    def evaluate_readiness(self, chat_history: List[Dict[str, str]]) -> Tuple[bool, str]:
-        """판단 모델을 구조화된 출력(JSON)으로 호출하여 기획 명세가 완료되었는지 체크"""
-        prompt = (
-            "사용자와 AI 웹 기획 에이전트 간의 아래 대화 내역을 분석해 주세요. "
-            "사용자가 요구하는 웹사이트를 코드로 구현하기에 충분한 기획 정보가 수집되었는지 검토해야 합니다. "
-            "필수 정보 조건: 웹사이트의 주제/목적, 기본적인 화면 레이아웃 및 섹션 구성(예: 헤더, 메인, 소개, 푸터 등), 그리고 디자인 컬러 톤이나 스타일. "
-            "기획이 완료되었다면 is_ready를 true로 설정하고, 정리된 요구사항 명세서를 summary 필드에 구체적으로 한글로 작성해 주세요. "
-            "기획 정보가 아직 부족하여 추가적인 대화가 필요하다면 is_ready를 false로 설정하고 summary는 빈 문자열로 두십시오.\n\n"
-            "대화 내역:\n"
-        )
-        for chat in chat_history:
-            prompt += f"{chat['role'].upper()}: {chat['message']}\n"
-
-        try:
-            response = self.client.models.generate_content(
-                model=self.chat_model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=ReadinessSchema,
-                    temperature=0.1
-                )
-            )
-            data = self._extract_json(response.text)
-            return bool(data.get("is_ready", False)), data.get("summary", "")
-        except Exception as e:
-            try:
-                data = self._extract_json(response.text)
-                return bool(data.get("is_ready", False)), data.get("summary", "")
-            except Exception:
-                return False, ""
+            return f"채팅 모델 호출 중 오류가 발생했습니다: {str(e)}", False, ""
 
     def generate_design(self, summary: str, framework: str = "vanilla") -> dict:
         """디자인 에이전트를 호출하여 가상 소스코드 파일 및 iframe용 프리뷰 HTML을 마크다운 포맷으로 안정적으로 작성"""
