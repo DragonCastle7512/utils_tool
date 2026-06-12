@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
 // 웹사이트 프리뷰 및 코드 조회 패널 컴포넌트
-export default function PreviewPanel({ design, loading }) {
+export default function PreviewPanel({ design, loading, progressMessage }) {
   const [activeTab, setActiveTab] = useState("preview"); // "preview" | "code"
   const [selectedFileIndex, setSelectedFileIndex] = useState(0);
 
@@ -59,7 +59,7 @@ export default function PreviewPanel({ design, loading }) {
         {loading ? (
           <div className="preview-loading">
             <div className="spinner"></div>
-            <p>디자인 에이전트가 코드를 완성하고 있습니다...</p>
+            <p>{progressMessage || "디자인 에이전트가 코드를 완성하고 있습니다..."}</p>
           </div>
         ) : !design ? (
           // 디자인 코드가 없을 때의 빈 페이지 뷰

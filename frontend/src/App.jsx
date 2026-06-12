@@ -15,6 +15,7 @@ export default function App() {
   
   const [loading, setLoading] = useState(false);
   const [sidebarLoading, setSidebarLoading] = useState(false);
+  const [progressMessage, setProgressMessage] = useState("");
 
   // 현재 활성화된 세션의 상세 메타데이터 찾기
   const activeSession = sessions.find((s) => s.session_id === activeSessionId);
@@ -33,6 +34,45 @@ export default function App() {
       setActiveDesign(null);
     }
   }, [activeSessionId]);
+
+  // 세션의 상태가 DESIGNING(디자인 중)인 경우 백엔드 진행 상태 실시간 폴링
+  useEffect(() => {
+    let intervalId = null;
+
+    if (activeSessionId && activeSession?.status === "DESIGNING") {
+      setProgressMessage(activeSession.progress_message || "디자인 에이전트 가동을 준비 중입니다...");
+      
+      intervalId = setInterval(async () => {
+        try {
+          const res = await fetch(`${API_BASE}/api/sessions/${activeSessionId}`);
+          if (res.ok) {
+            const sessionData = await res.json();
+            setProgressMessage(sessionData.progress_message);
+            
+            if (sessionData.status === "COMPLETED") {
+              await fetchSessionDetails(activeSessionId);
+              await fetchSessions();
+              setProgressMessage("");
+            } else if (sessionData.status === "FAILED") {
+              alert(`디자인 생성 중 실패했습니다: ${sessionData.progress_message}`);
+              await fetchSessions();
+              setProgressMessage("");
+            }
+          }
+        } catch (err) {
+          console.error("세션 상태 폴링 중 오류 발생:", err);
+        }
+      }, 2000);
+    } else {
+      setProgressMessage("");
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [activeSessionId, activeSession?.status]);
 
   // 세션 목록 API 호출
   const fetchSessions = async () => {
@@ -174,7 +214,8 @@ export default function App() {
         {/* 우측: 실시간 웹 프리뷰 및 소스코드 뷰어 */}
         <PreviewPanel
           design={activeDesign}
-          loading={loading && activeSession?.status === "DESIGNING"}
+          loading={activeSession?.status === "DESIGNING"}
+          progressMessage={progressMessage}
         />
       </main>
     </div>
