@@ -173,7 +173,10 @@ class AgentOrchestrator:
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
                     temperature=0.7,
-                    tools=[mark_planning_complete]
+                    tools=[mark_planning_complete],
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                        disable=True
+                    )
                 )
             )
             
