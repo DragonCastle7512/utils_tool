@@ -12,10 +12,11 @@ class ReadinessSchema(BaseModel):
 
 
 class AgentOrchestrator:
-    def __init__(self, api_key: str = None, chat_model: str = "gemini-3.1-flash-lite", design_model: str = "gemma-4-26b-a4b-it"):
+    def __init__(self, api_key: str = None, chat_model: str = "gemini-3.1-flash-lite", design_model: str = "gemma-4-26b-a4b-it", review_model: str = "gemma-4-26b-a4b-it"):
         self.api_key = api_key
         self.chat_model = chat_model
         self.design_model = design_model
+        self.review_model = review_model
         # 테스트 시 API 키가 없어도 인스턴스 생성이 실패하지 않도록 클라이언트를 필요할 때 지연 로딩함
         self._client = None
 
@@ -332,7 +333,7 @@ class AgentOrchestrator:
 
         try:
             response = self.client.models.generate_content(
-                model=self.design_model,
+                model=self.review_model,
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.1,
@@ -341,6 +342,6 @@ class AgentOrchestrator:
             return self._parse_markdown_design(response.text, default_framework=initial_design["framework"])
         except Exception as e:
             import traceback
-            print(f"\n[에러 발생] 디자인 검토 및 수정 실패 (모델: {self.design_model}): {str(e)}")
+            print(f"\n[에러 발생] 디자인 검토 및 수정 실패 (모델: {self.review_model}): {str(e)}")
             traceback.print_exc()
             return initial_design
