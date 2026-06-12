@@ -1,6 +1,6 @@
 import uuid
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from pydantic import BaseModel
 from app.db import DatabaseHelper
 from app.agents import AgentOrchestrator
@@ -20,6 +20,12 @@ class SessionResponse(BaseModel):
     session_id: str
     title: str
     status: str
+
+class SessionDetailResponse(BaseModel):
+    session_id: str
+    title: str
+    status: str
+    progress_message: str
 
 class ChatReq(BaseModel):
     message: str
@@ -71,8 +77,48 @@ def list_sessions(db: DatabaseHelper = Depends(get_db)):
         ))
     return sessions
 
+def generate_and_review_design_task(session_id: str, summary: str, framework: str, db_name: str = "util_tools"):
+    db = DatabaseHelper(db_name=db_name)
+    try:
+        db.update_progress_message(session_id, "디자인 에이전트가 1차 코드를 작성 중입니다...")
+        initial_design = orchestrator.generate_design(summary, framework)
+        
+        db.update_progress_message(session_id, "검토 에이전트가 소스코드를 리팩토링 및 검수 중입니다...")
+        generated_design = orchestrator.review_and_correct_design(initial_design, summary)
+        
+        existing_designs = db.get_designs(session_id)
+        next_version = len(existing_designs) + 1
+        db.save_design(
+            session_id=session_id,
+            version=next_version,
+            framework=generated_design["framework"],
+            files=generated_design["files"],
+            preview_html=generated_design["preview_html"],
+            summary=generated_design["summary"]
+        )
+        
+        db.update_session_status(session_id, "COMPLETED")
+        db.update_progress_message(session_id, "완성되었습니다!")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        db.update_session_status(session_id, "FAILED")
+        db.update_progress_message(session_id, f"오류 발생: {str(e)}")
+
+@router.get("/{session_id}", response_model=SessionDetailResponse)
+def get_session_details(session_id: str, db: DatabaseHelper = Depends(get_db)):
+    session = db.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+    return SessionDetailResponse(
+        session_id=session["session_id"],
+        title=session["title"],
+        status=session["status"],
+        progress_message=session.get("progress_message", "")
+    )
+
 @router.post("/{session_id}/chat", response_model=ChatResponse)
-def chat(session_id: str, req: ChatReq, db: DatabaseHelper = Depends(get_db)):
+def chat(session_id: str, req: ChatReq, background_tasks: BackgroundTasks, db: DatabaseHelper = Depends(get_db)):
     session = db.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
@@ -83,58 +129,25 @@ def chat(session_id: str, req: ChatReq, db: DatabaseHelper = Depends(get_db)):
     # 2. 전체 대화 기록 컨텍스트 조회
     history = db.get_chat_history(session_id)
 
-    # 3. 메인 에이전트(기획)를 호출하여 대화 답변 생성
-    reply = orchestrator.get_chat_response(history)
+    # 3. 메인 에이전트(기획)를 호출하여 답변 및 기획 완료 여부 확인
+    reply, is_ready, summary = orchestrator.get_chat_response(history)
     db.save_chat(session_id, "assistant", reply)
 
-    # 4. 판단기에 전달할 최종 대화 기록 최신화
-    updated_history = db.get_chat_history(session_id)
-
-    # 5. 기획이 완료되어 웹사이트 생성이 가능한지 판별
-    is_ready, summary = orchestrator.evaluate_readiness(updated_history)
-
-    design_data = None
     if is_ready:
         # 세션 상태를 'DESIGNING(디자인중)'으로 변경
         db.update_session_status(session_id, "DESIGNING")
+        db.update_progress_message(session_id, "디자인 에이전트 가동을 준비 중입니다...")
 
-        # 생성될 소스코드 디자인 버전 번호 계산
-        existing_designs = db.get_designs(session_id)
-        next_version = len(existing_designs) + 1
-
-        # 디자인 에이전트를 가동하여 1차 소스코드 파일 트리 생성
-        initial_design = orchestrator.generate_design(summary, req.framework)
-        # 검토 에이전트를 추가로 가동하여 최종 검토 및 디테일 보완 코드 생성
-        generated_design = orchestrator.review_and_correct_design(initial_design, summary)
-
-        # DB 저장
-        db.save_design(
-            session_id=session_id,
-            version=next_version,
-            framework=generated_design["framework"],
-            files=generated_design["files"],
-            preview_html=generated_design["preview_html"],
-            summary=generated_design["summary"]
-        )
-
-        # 세션 상태를 'COMPLETED(기획/디자인 완료)'로 변경
-        db.update_session_status(session_id, "COMPLETED")
-
-        design_data = DesignResponse(
-            version=next_version,
-            framework=generated_design["framework"],
-            files=[CodeFileResponse(path=f["path"], content=f["content"]) for f in generated_design["files"]],
-            preview_html=generated_design["preview_html"],
-            summary=generated_design["summary"]
-        )
+        # 백그라운드 태스크 등록
+        background_tasks.add_task(generate_and_review_design_task, session_id, summary, req.framework, db.db.name)
     else:
-        # 기획 미완료 상태인 경우 상태를 'CLARIFYING(대화기획중)'으로 유지
+        # 기획 미완료 상태인 경우 상태를 'CLARIFYING'으로 유지
         db.update_session_status(session_id, "CLARIFYING")
 
     return ChatResponse(
         reply=reply,
         is_ready=is_ready,
-        design=design_data
+        design=None
     )
 
 @router.get("/{session_id}/history", response_model=List[ChatHistoryResponse])

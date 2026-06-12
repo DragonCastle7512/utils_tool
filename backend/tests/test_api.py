@@ -37,8 +37,7 @@ def test_session_lifecycle():
 @patch("app.routers.sessions.orchestrator")
 def test_chat_interaction_not_ready(mock_orch):
     # 기획 미완료 상태 응답을 주도록 에이전트 모킹
-    mock_orch.get_chat_response.return_value = "좋습니다! 선호하시는 메인 색상이 있으신가요?"
-    mock_orch.evaluate_readiness.return_value = (False, "")
+    mock_orch.get_chat_response.return_value = ("좋습니다! 선호하시는 메인 색상이 있으신가요?", False, "")
     
     # 세션 생성
     create_resp = client.post("/api/sessions", json={"title": "내 홈페이지"})
@@ -63,11 +62,17 @@ def test_chat_interaction_not_ready(mock_orch):
     assert history[1]["role"] == "assistant"
     assert history[1]["message"] == "좋습니다! 선호하시는 메인 색상이 있으신가요?"
 
+    # 세션 상세 조회 검증
+    detail_resp = client.get(f"/api/sessions/{sess_id}")
+    assert detail_resp.status_code == 200
+    detail = detail_resp.json()
+    assert detail["status"] == "CLARIFYING"
+    assert detail["progress_message"] == ""
+
 @patch("app.routers.sessions.orchestrator")
 def test_chat_interaction_triggers_design(mock_orch):
     # 기획 완료 상태 및 웹 디자인 생성을 진행하도록 에이전트 모킹
-    mock_orch.get_chat_response.return_value = "요구사항이 명확히 수집되었습니다. 웹사이트 생성을 시작합니다!"
-    mock_orch.evaluate_readiness.return_value = (True, "리액트 기반 핑크 테마 쇼핑몰")
+    mock_orch.get_chat_response.return_value = ("요구사항이 명확히 수집되었습니다. 웹사이트 생성을 시작합니다!", True, "리액트 기반 핑크 테마 쇼핑몰")
     mock_orch.generate_design.return_value = {
         "framework": "react",
         "files": [
@@ -88,9 +93,14 @@ def test_chat_interaction_triggers_design(mock_orch):
     chat_data = chat_resp.json()
     
     assert chat_data["is_ready"] is True
-    assert chat_data["design"] is not None
-    assert chat_data["design"]["framework"] == "react"
-    assert chat_data["design"]["preview_html"] == "<h1>핑크 쇼핑몰 메인</h1>"
+    assert chat_data["design"] is None  # 백그라운드로 전송되어 즉시 응답 시에는 None
+    
+    # TestClient의 경우 백그라운드 태스크가 동기적으로 즉시 수행 완료되므로 상태가 COMPLETED로 전환됨
+    detail_resp = client.get(f"/api/sessions/{sess_id}")
+    assert detail_resp.status_code == 200
+    detail = detail_resp.json()
+    assert detail["status"] == "COMPLETED"
+    assert detail["progress_message"] == "완성되었습니다!"
     
     # 디자인 히스토리 내역 조회 검증
     design_resp = client.get(f"/api/sessions/{sess_id}/designs")
