@@ -24,6 +24,12 @@ def test_session_lifecycle(db):
     assert session["session_id"] == session_id
     assert session["title"] == title
     assert session["status"] == "CLARIFYING"
+    assert session["progress_message"] == ""
+
+    # 3. 진행 상황 메시지 업데이트 검증
+    db.update_progress_message(session_id, "작업 중...")
+    session = db.get_session(session_id)
+    assert session["progress_message"] == "작업 중..."
 
 def test_chat_lifecycle(db):
     session_id = "test-session-123"

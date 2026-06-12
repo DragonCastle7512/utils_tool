@@ -22,6 +22,7 @@ class DatabaseHelper:
             "session_id": session_id,
             "title": title,
             "status": "CLARIFYING",
+            "progress_message": "",
             "created_at": datetime.utcnow()
         })
 
@@ -34,6 +35,13 @@ class DatabaseHelper:
         self.db.sessions.update_one(
             {"session_id": session_id},
             {"$set": {"status": status}}
+        )
+
+    def update_progress_message(self, session_id: str, progress_message: str):
+        """세션의 실시간 진행률 메시지 갱신"""
+        self.db.sessions.update_one(
+            {"session_id": session_id},
+            {"$set": {"progress_message": progress_message}}
         )
 
     def save_chat(self, session_id: str, role: str, message: str):
