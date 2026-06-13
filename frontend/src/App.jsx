@@ -144,11 +144,16 @@ export default function App() {
   };
 
   // 에이전트와 대화 메시지 송수신
-  const handleSendMessage = async (text) => {
+  const handleSendMessage = async (text, imageObj = null) => {
     if (!activeSessionId) return;
 
     // 사용자 화면에 자신의 말풍선 즉시 추가
-    const userMessage = { role: "user", message: text };
+    const userMessage = { 
+      role: "user", 
+      message: text,
+      image_data: imageObj ? imageObj.base64 : null,
+      mime_type: imageObj ? imageObj.type : null
+    };
     setMessages((prev) => [...prev, userMessage]);
     setLoading(true);
 
@@ -158,7 +163,9 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
-          framework: framework
+          framework: framework,
+          image_data: imageObj ? imageObj.base64 : null,
+          mime_type: imageObj ? imageObj.type : null
         })
       });
 

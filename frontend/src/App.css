@@ -846,3 +846,93 @@ body {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
+
+/* 이미지 첨부 미리보기 영역 */
+.selected-image-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  background-color: rgba(11, 19, 41, 0.6);
+  border-top: 1px solid var(--border-color);
+  position: relative;
+}
+
+.selected-image-preview img {
+  max-width: 60px;
+  max-height: 60px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.remove-preview-btn {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: bold;
+  transition: var(--transition-smooth);
+}
+
+.remove-preview-btn:hover {
+  background-color: rgba(239, 68, 68, 0.4);
+  color: #fff;
+}
+
+/* 이미지 첨부 클립 버튼 */
+.attach-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-smooth);
+  border-radius: 6px;
+}
+
+.attach-btn:hover:not(:disabled) {
+  color: var(--accent-cyan);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.attach-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.attach-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* 말풍선 내부 이미지 렌더링 */
+.bubble-image-container {
+  margin-bottom: 8px;
+  display: block;
+}
+
+.bubble-image {
+  max-width: min(100%, 260px);
+  max-height: 200px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: block;
+  transition: transform var(--transition-smooth);
+}
+
+.bubble-image:hover {
+  transform: scale(1.02);
+}
+

@@ -10,18 +10,46 @@ export default function ChatPanel({
   onChangeFramework
 }) {
   const [input, setInput] = useState("");
+  const [selectedImage, setSelectedImage] = useState(null); // { file, base64, type }
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // 메시지가 추가되면 최하단으로 자동 스크롤
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setSelectedImage({
+        file: file,
+        base64: reader.result.split(",")[1], // Strip out 'data:image/...;base64,' prefix
+        type: file.type
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedImage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!input.trim() || loading) return;
-    onSendMessage(input);
+    if ((!input.trim() && !selectedImage) || loading) return;
+    onSendMessage(input, selectedImage);
     setInput("");
+    setSelectedImage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   if (!session) {
@@ -96,7 +124,18 @@ export default function ChatPanel({
               <div className="bubble-sender">
                 {msg.role === "user" ? "나 (User)" : "기획 에이전트"}
               </div>
-              <div className="bubble-content">{msg.message}</div>
+              <div className="bubble-content">
+                {msg.image_data && msg.mime_type && (
+                  <div className="bubble-image-container">
+                    <img 
+                      src={`data:${msg.mime_type};base64,${msg.image_data}`} 
+                      alt="User draft mockup" 
+                      className="bubble-image" 
+                    />
+                  </div>
+                )}
+                {msg.message}
+              </div>
             </div>
           ))
         )}
@@ -114,8 +153,36 @@ export default function ChatPanel({
         <div ref={messagesEndRef} />
       </div>
 
+      {/* 이미지 미리보기 */}
+      {selectedImage && (
+        <div className="selected-image-preview">
+          <img src={`data:${selectedImage.type};base64,${selectedImage.base64}`} alt="preview" />
+          <button type="button" onClick={handleRemoveImage} className="remove-preview-btn">✕</button>
+        </div>
+      )}
+
       {/* 메시지 입력 영역 */}
       <form className="chat-input-area" onSubmit={handleSubmit}>
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleImageChange}
+          accept="image/*"
+          style={{ display: "none" }}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="attach-btn"
+          disabled={loading || session.status === "DESIGNING"}
+          title="초안 이미지 추가"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <polyline points="21 15 16 10 5 21" />
+          </svg>
+        </button>
         <input
           type="text"
           value={input}
@@ -123,14 +190,14 @@ export default function ChatPanel({
           placeholder={
             loading
               ? "답변 대기 중..."
-              : "만들고 싶은 홈페이지의 목적, 구조, 컬러 등에 대해 적어주세요..."
+              : "만들고 싶은 홈페이지 설명 또는 초안 이미지 업로드..."
           }
           disabled={loading || session.status === "DESIGNING"}
         />
         <button
           type="submit"
           className="send-btn"
-          disabled={!input.trim() || loading || session.status === "DESIGNING"}
+          disabled={(!input.trim() && !selectedImage) || loading || session.status === "DESIGNING"}
         >
           <svg
             viewBox="0 0 24 24"
