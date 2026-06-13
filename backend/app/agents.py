@@ -159,10 +159,27 @@ class AgentOrchestrator:
         contents = []
         for chat in chat_history:
             role = "user" if chat["role"] == "user" else "model"
+            parts = []
+            
+            # Base64 이미지 데이터가 존재할 경우 디코딩하여 Part에 추가
+            if chat.get("image_data") and chat.get("mime_type"):
+                import base64
+                try:
+                    img_bytes = base64.b64decode(chat["image_data"])
+                    parts.append(
+                        types.Part.from_bytes(
+                            data=img_bytes,
+                            mime_type=chat["mime_type"]
+                        )
+                    )
+                except Exception as e:
+                    print(f"Error decoding base64 image: {e}")
+                    
+            parts.append(types.Part.from_text(text=chat["message"]))
             contents.append(
                 types.Content(
                     role=role,
-                    parts=[types.Part.from_text(text=chat["message"])]
+                    parts=parts
                 )
             )
 

@@ -109,3 +109,25 @@ def test_chat_interaction_triggers_design(mock_orch):
     assert len(designs) == 1
     assert designs[0]["version"] == 1
     assert designs[0]["framework"] == "react"
+
+@patch("app.routers.sessions.orchestrator")
+def test_chat_with_image(mock_orch):
+    mock_orch.get_chat_response.return_value = ("이미지를 확인했습니다.", False, "")
+    
+    create_resp = client.post("/api/sessions", json={"title": "이미지 인식 세션"})
+    sess_id = create_resp.json()["session_id"]
+    
+    chat_resp = client.post(f"/api/sessions/{sess_id}/chat", json={
+        "message": "이 초안대로 디자인해줘",
+        "image_data": "dGVzdF9kYXRh",
+        "mime_type": "image/png"
+    })
+    assert chat_resp.status_code == 200
+    
+    hist_resp = client.get(f"/api/sessions/{sess_id}/history")
+    assert hist_resp.status_code == 200
+    history = hist_resp.json()
+    assert len(history) == 2
+    assert history[0]["image_data"] == "dGVzdF9kYXRh"
+    assert history[0]["mime_type"] == "image/png"
+

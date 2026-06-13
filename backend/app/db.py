@@ -44,12 +44,14 @@ class DatabaseHelper:
             {"$set": {"progress_message": progress_message}}
         )
 
-    def save_chat(self, session_id: str, role: str, message: str):
+    def save_chat(self, session_id: str, role: str, message: str, image_data: str = None, mime_type: str = None):
         """채팅 내역 단건 기록"""
         self.db.chats.insert_one({
             "session_id": session_id,
             "role": role,
             "message": message,
+            "image_data": image_data,
+            "mime_type": mime_type,
             "timestamp": datetime.utcnow()
         })
 
@@ -61,6 +63,8 @@ class DatabaseHelper:
             history.append({
                 "role": doc["role"],
                 "message": doc["message"],
+                "image_data": doc.get("image_data"),
+                "mime_type": doc.get("mime_type"),
                 "timestamp": doc["timestamp"].isoformat() if "timestamp" in doc else None
             })
         return history

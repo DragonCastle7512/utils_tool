@@ -30,6 +30,8 @@ class SessionDetailResponse(BaseModel):
 class ChatReq(BaseModel):
     message: str
     framework: Optional[str] = "vanilla"
+    image_data: Optional[str] = None
+    mime_type: Optional[str] = None
 
 class CodeFileResponse(BaseModel):
     path: str
@@ -50,6 +52,8 @@ class ChatResponse(BaseModel):
 class ChatHistoryResponse(BaseModel):
     role: str
     message: str
+    image_data: Optional[str] = None
+    mime_type: Optional[str] = None
     timestamp: Optional[str] = None
 
 @router.post("", response_model=SessionResponse)
@@ -124,7 +128,7 @@ def chat(session_id: str, req: ChatReq, background_tasks: BackgroundTasks, db: D
         raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
 
     # 1. 사용자 채팅 내용 DB 저장
-    db.save_chat(session_id, "user", req.message)
+    db.save_chat(session_id, "user", req.message, req.image_data, req.mime_type)
 
     # 2. 전체 대화 기록 컨텍스트 조회
     history = db.get_chat_history(session_id)
@@ -156,7 +160,16 @@ def get_chat_history(session_id: str, db: DatabaseHelper = Depends(get_db)):
     if not session:
         raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
     history = db.get_chat_history(session_id)
-    return [ChatHistoryResponse(role=h["role"], message=h["message"], timestamp=h["timestamp"]) for h in history]
+    return [
+        ChatHistoryResponse(
+            role=h["role"],
+            message=h["message"],
+            image_data=h.get("image_data"),
+            mime_type=h.get("mime_type"),
+            timestamp=h["timestamp"]
+        )
+        for h in history
+    ]
 
 @router.get("/{session_id}/designs", response_model=List[DesignResponse])
 def get_designs(session_id: str, db: DatabaseHelper = Depends(get_db)):

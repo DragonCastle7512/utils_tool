@@ -125,3 +125,32 @@ def test_inline_resources(orchestrator):
     assert "<script>\nconsole.log('hello');\n</script>" in inlined_html
     assert '<link rel="stylesheet"' not in inlined_html
     assert 'src="script.js"' not in inlined_html
+
+@patch("app.agents.genai.Client")
+def test_get_chat_response_with_image(mock_genai_client_class, orchestrator):
+    mock_client = MagicMock()
+    mock_genai_client_class.return_value = mock_client
+    
+    mock_response = MagicMock()
+    mock_response.text = "이미지를 확인했습니다."
+    mock_response.function_calls = []
+    mock_client.models.generate_content.return_value = mock_response
+    
+    history = [
+        {"role": "user", "message": "초안 참고해줘", "image_data": "dGVzdF9kYXRh", "mime_type": "image/png"}
+    ]
+    reply, is_ready, summary = orchestrator.get_chat_response(history)
+    
+    assert reply == "이미지를 확인했습니다."
+    
+    # generate_content 호출 파라미터 검증
+    call_args = mock_client.models.generate_content.call_args[1]
+    contents = call_args["contents"]
+    
+    user_content = contents[0]
+    assert len(user_content.parts) == 2
+    
+    image_part = user_content.parts[0]
+    assert image_part.inline_data.mime_type == "image/png"
+    assert image_part.inline_data.data == b"test_data"
+

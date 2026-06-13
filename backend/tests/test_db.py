@@ -46,6 +46,15 @@ def test_chat_lifecycle(db):
     assert history[1]["role"] == "assistant"
     assert history[1]["message"] == "어떤 컬러 테마를 원하시나요?"
 
+def test_chat_lifecycle_with_image(db):
+    session_id = "test-session-image-123"
+    db.create_session(session_id, "이미지 테스트")
+    db.save_chat(session_id, "user", "초안 참고해줘", image_data="dGVzdF9kYXRh", mime_type="image/png")
+    history = db.get_chat_history(session_id)
+    assert len(history) == 1
+    assert history[0]["image_data"] == "dGVzdF9kYXRh"
+    assert history[0]["mime_type"] == "image/png"
+
 def test_design_lifecycle(db):
     session_id = "test-session-123"
     
