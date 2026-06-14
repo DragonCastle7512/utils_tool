@@ -179,3 +179,93 @@ def test_get_chat_response_with_image(mock_genai_client_class, orchestrator):
     assert image_part.inline_data.mime_type == "image/png"
     assert image_part.inline_data.data == b"test_data"
 
+def test_generate_design_with_previous_design(orchestrator):
+    with patch("app.agents.genai.Client") as mock_genai_client_class:
+        mock_client = MagicMock()
+        mock_genai_client_class.return_value = mock_client
+        
+        mock_response = MagicMock()
+        mock_response.text = '''
+[FRAMEWORK]: react
+[SUMMARY]: 버튼 색상 변경 반영 쇼핑몰
+[FILE]: src/App.jsx
+```jsx
+export default function App() { return <button style={{color: "blue"}}>파란 버튼</button>; }
+```
+[FILE]: preview.html
+```html
+<button style="color: blue">파란 버튼</button>
+```
+'''
+        mock_client.models.generate_content.return_value = mock_response
+        
+        previous_design = {
+            "version": 1,
+            "framework": "react",
+            "files": [
+                {"path": "src/App.jsx", "content": "export default function App() { return <button>기본 버튼</button>; }"}
+            ]
+        }
+        
+        design = orchestrator.generate_design(
+            summary="버튼 색상을 파란색으로 변경해줘",
+            framework="react",
+            previous_design=previous_design
+        )
+        
+        # generate_content가 호출되었을 때, contents 안에 이전 소스 코드가 주입되었는지 검증
+        call_args = mock_client.models.generate_content.call_args[1]
+        prompt = call_args["contents"]
+        
+        assert "이전 버전 소스 코드 (Version 1)" in prompt
+        assert "기본 버튼" in prompt
+        assert design["framework"] == "react"
+        assert "color: blue" in design["preview_html"]
+
+def test_review_and_correct_design_with_previous_design(orchestrator):
+    with patch("app.agents.genai.Client") as mock_genai_client_class:
+        mock_client = MagicMock()
+        mock_genai_client_class.return_value = mock_client
+        
+        mock_response = MagicMock()
+        mock_response.text = '''
+[FRAMEWORK]: react
+[SUMMARY]: 버튼 색상 변경 검토 완료
+[FILE]: src/App.jsx
+```jsx
+export default function App() { return <button style={{color: "blue"}}>파란 버튼 (검토 완료)</button>; }
+```
+[FILE]: preview.html
+```html
+<button style="color: blue">파란 버튼 (검토 완료)</button>
+```
+'''
+        mock_client.models.generate_content.return_value = mock_response
+        
+        initial_design = {
+            "framework": "react",
+            "files": [
+                {"path": "src/App.jsx", "content": "export default function App() { return <button style={{color: 'blue'}}>파란 버튼</button>; }"}
+            ]
+        }
+        previous_design = {
+            "version": 1,
+            "framework": "react",
+            "files": [
+                {"path": "src/App.jsx", "content": "export default function App() { return <button>기본 버튼</button>; }"}
+            ]
+        }
+        
+        corrected = orchestrator.review_and_correct_design(
+            initial_design=initial_design,
+            summary="버튼 색상을 파란색으로 변경해줘",
+            previous_design=previous_design
+        )
+        
+        call_args = mock_client.models.generate_content.call_args[1]
+        prompt = call_args["contents"]
+        
+        assert "이전 버전 소스 코드 (Version 1)" in prompt
+        assert "기본 버튼" in prompt
+        assert "파란 버튼 (검토 완료)" in corrected["preview_html"]
+

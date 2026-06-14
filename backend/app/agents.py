@@ -224,7 +224,7 @@ class AgentOrchestrator:
         except Exception as e:
             return f"채팅 모델 호출 중 오류가 발생했습니다: {str(e)}", False, "", "vanilla"
 
-    def generate_design(self, summary: str, framework: str = "vanilla") -> dict:
+    def generate_design(self, summary: str, framework: str = "vanilla", previous_design: dict = None) -> dict:
         """디자인 에이전트를 호출하여 가상 소스코드 파일 및 iframe용 프리뷰 HTML을 마크다운 포맷으로 안정적으로 작성"""
         framework_instructions = {
             "vanilla": (
@@ -243,6 +243,14 @@ class AgentOrchestrator:
                 "또한, 반드시 preview.html 이라는 파일 경로를 하나 더 만들고, CDN을 통해 Vue를 바인딩하여 브라우저에서 독립 실행이 가능한 프리뷰용 단일 HTML 문서를 작성해 주십시오."
             )
         }
+
+        previous_code_context = ""
+        if previous_design:
+            previous_code_context = f"\n\n[이전 버전 소스 코드 (Version {previous_design.get('version', 1)})]:\n"
+            for file in previous_design.get("files", []):
+                path = file["path"]
+                ext = path.split(".")[-1] if "." in path else ""
+                previous_code_context += f"[FILE]: {path}\n```{ext}\n{file['content']}\n```\n\n"
 
         prompt = (
             "당신은 실무 경력 10년 이상의 수석 프론트엔드 UI/UX 엔지니어이자 최고 수준의 디지털 디자이너 에이전트입니다. "
@@ -266,7 +274,17 @@ class AgentOrchestrator:
             
             f"[기획 명세서]:\n{summary}\n"
             f"[타겟 프레임워크]: {framework}\n\n"
-            
+        )
+
+        if previous_code_context:
+            prompt += (
+                f"{previous_code_context}\n"
+                "**주의: [이전 버전 소스 코드]가 존재하므로, 사용자가 기존 소스 코드를 바탕으로 수정 및 기능 반영을 요청한 상태입니다.**\n"
+                "처음부터 소스 코드를 아예 다르게 새로 생성하지 말고, 기존 소스 코드의 전체적인 레이아웃 구조, 스타일 컨셉, 테마 색상, 변수명 및 파일 구성을 최대한 일관성 있게 유지하십시오.\n"
+                "오직 기획 명세서에 지시된 수정 사항 또는 추가 기능 영역에 대해서만 기존 코드에 정확히 반영/수정하여 완성된 전체 코드를 반환하십시오.\n\n"
+            )
+
+        prompt += (
             "웹사이트 생성 시 반드시 준수해야 하는 [디자인 및 엔지니어링 지침]:\n\n"
             
             "1. 컨셉추얼한 비주얼 테마 설정 (Aesthetic Point-of-View)\n"
@@ -327,12 +345,20 @@ class AgentOrchestrator:
                 "summary": f"생성 실패: {str(e)}"
             }
 
-    def review_and_correct_design(self, initial_design: dict, summary: str) -> dict:
+    def review_and_correct_design(self, initial_design: dict, summary: str, previous_design: dict = None) -> dict:
         """1차 생성된 디자인의 코드 오류를 검토하고 시각적 디테일을 정교하게 수정"""
         # 생성된 파일들을 텍스트 포맷으로 변환
         files_context = ""
         for f in initial_design["files"]:
             files_context += f"[FILE]: {f['path']}\n```\n{f['content']}\n```\n\n"
+
+        previous_code_context = ""
+        if previous_design:
+            previous_code_context = f"\n\n[이전 버전 소스 코드 (Version {previous_design.get('version', 1)})]:\n"
+            for file in previous_design.get("files", []):
+                path = file["path"]
+                ext = path.split(".")[-1] if "." in path else ""
+                previous_code_context += f"[FILE]: {path}\n```{ext}\n{file['content']}\n```\n\n"
 
         prompt = (
             "당신은 최고 품질을 지향하는 웹 퍼블리싱 검토 및 코드 리팩토링 에이전트입니다.\n"
@@ -342,13 +368,28 @@ class AgentOrchestrator:
             "   - Flexbox나 Grid 설정이 잘못되어 요소가 찌그러지거나 넘치는 현상(Overflow)이 없는지 확인하세요.\n"
             "   - 반응형 미디어 쿼리(Media Query)가 누락되었거나 모바일 뷰포트(320px)에서 깨지는 부분이 있다면 완벽히 교정하세요.\n"
             "2. 인터랙션 디테일 검토:\n"
-            "   - 모든 버튼과 마우스 오버(Hover)가 일어나는 인터랙티브 요소에 부드러운 transition 효과와 반응형 피드백을 강화하세요.\n"
+            "   - 모든 버튼 and 마우스 오버(Hover)가 일어나는 인터랙티브 요소에 부드러운 transition 효과와 반응형 피드백을 강화하세요.\n"
             "3. 디자인 토큰 검토:\n"
             "   - 하드코딩된 색상 코드나 일관성 없는 여백 값을 찾아내어 공통 CSS 변수 사용으로 통일성 있게 리팩토링하세요.\n"
             "4. 완결성 검토:\n"
             "   - 절대로 코드 중간에 '// ... 생략'이나 주석 처리를 통한 스킵이 없어야 합니다. 모든 파일의 전체 코드를 빈틈없이 반환하세요.\n\n"
-            
+        )
+
+        if previous_code_context:
+            prompt += (
+                "5. 일관성 검토:\n"
+                "   - [이전 버전 소스 코드]와 대비하여, 디자인 에이전트가 기존 스타일, 레이아웃 컨셉, 아키텍처 등을 불필요하게 아예 무시하고 새로 짜지 않았는지 확인하세요.\n"
+                "   - 기존 코드의 구조와 스타일 흐름을 최대한 존중하며 사용자의 새로운 요구사항([기획 명세서])에 해당하는 부분만 정확히 개선/추가되었는지 검수하고, 일관성이 훼손되지 않도록 코드를 리팩토링하세요.\n\n"
+            )
+
+        prompt += (
             f"[기획 명세서]:\n{summary}\n\n"
+        )
+
+        if previous_code_context:
+            prompt += f"[이전 버전 소스 코드]:\n{previous_code_context}\n\n"
+
+        prompt += (
             f"[1차 생성된 웹사이트 소스코드]:\n{files_context}\n"
             f"[타겟 프레임워크]: {initial_design['framework']}\n\n"
             
