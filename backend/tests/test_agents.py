@@ -17,11 +17,12 @@ def test_get_chat_response_without_tool(mock_genai_client_class, orchestrator):
     mock_client.models.generate_content.return_value = mock_response
     
     history = [{"role": "user", "message": "안녕"}]
-    reply, is_ready, summary = orchestrator.get_chat_response(history)
+    reply, is_ready, summary, framework = orchestrator.get_chat_response(history)
     
     assert reply == "안녕하세요! 어떤 홈페이지를 제작하고 싶으신가요?"
     assert is_ready is False
     assert summary == ""
+    assert framework == "vanilla"
     mock_client.models.generate_content.assert_called_once()
 
 @patch("app.agents.genai.Client")
@@ -40,11 +41,35 @@ def test_get_chat_response_with_tool(mock_genai_client_class, orchestrator):
     mock_client.models.generate_content.return_value = mock_response
     
     history = [{"role": "user", "message": "완료"}]
-    reply, is_ready, summary = orchestrator.get_chat_response(history)
+    reply, is_ready, summary, framework = orchestrator.get_chat_response(history)
     
     assert reply == "기획이 완료되어 디자인을 시작합니다."
     assert is_ready is True
     assert summary == "핑크 테마 쇼핑몰"
+    assert framework == "vanilla"
+
+@patch("app.agents.genai.Client")
+def test_get_chat_response_with_framework_selection(mock_genai_client_class, orchestrator):
+    mock_client = MagicMock()
+    mock_genai_client_class.return_value = mock_client
+    
+    mock_response = MagicMock()
+    mock_response.text = "기획이 완료되어 디자인을 시작합니다."
+    
+    mock_call = MagicMock()
+    mock_call.name = "mark_planning_complete"
+    mock_call.args = {"summary": "리액트 기반 쇼핑몰", "framework": "react"}
+    mock_response.function_calls = [mock_call]
+    
+    mock_client.models.generate_content.return_value = mock_response
+    
+    history = [{"role": "user", "message": "리액트로 쇼핑몰 만들어줘"}]
+    reply, is_ready, summary, framework = orchestrator.get_chat_response(history)
+    
+    assert reply == "기획이 완료되어 디자인을 시작합니다."
+    assert is_ready is True
+    assert summary == "리액트 기반 쇼핑몰"
+    assert framework == "react"
 
 @patch("app.agents.genai.Client")
 def test_generate_design(mock_genai_client_class, orchestrator):
@@ -139,7 +164,7 @@ def test_get_chat_response_with_image(mock_genai_client_class, orchestrator):
     history = [
         {"role": "user", "message": "초안 참고해줘", "image_data": "dGVzdF9kYXRh", "mime_type": "image/png"}
     ]
-    reply, is_ready, summary = orchestrator.get_chat_response(history)
+    reply, is_ready, summary, framework = orchestrator.get_chat_response(history)
     
     assert reply == "이미지를 확인했습니다."
     

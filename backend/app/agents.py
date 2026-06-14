@@ -11,12 +11,13 @@ class ReadinessSchema(BaseModel):
     summary: str = Field(description="완료된 경우(is_ready가 True인 경우) 웹사이트의 구조, 테마 색상, 구성 요소 등을 요약한 기획 명세서 정보. 완료되지 않은 경우 빈 문자열")
 
 
-def mark_planning_complete(summary: str) -> str:
+def mark_planning_complete(summary: str, framework: str = "vanilla") -> str:
     """웹사이트 생성을 위한 기획이 최종적으로 완료되었을 때 호출합니다.
-    이 함수를 호출하면 기획 단계가 종료되고, 요약된 기획 스펙을 바탕으로 웹사이트 코드가 백그라운드에서 생성되기 시작합니다.
+    이 함수를 호출하면 기획 단계가 종료되고, 요약된 기획 스펙과 결정된 프레임워크를 바탕으로 웹사이트 코드가 백그라운드에서 생성되기 시작합니다.
 
     Args:
         summary: 사용자와 조율을 완료한 웹사이트의 주제, 레이아웃, 컬러 테마, 주요 기능 등의 상세 요약 정보.
+        framework: 사용자가 특정 기술(예: 리액트/react, 뷰/vue)로 만들어달라고 명시적으로 요청했거나 선호하는 프레임워크가 있는 경우 해당 프레임워크('react' 또는 'vue'). 명시적인 언급이 없는 경우에는 기본값인 'vanilla'.
     """
     return "기획이 확정되어 웹사이트 생성을 시작합니다."
 
@@ -146,13 +147,15 @@ class AgentOrchestrator:
 
         return html
 
-    def get_chat_response(self, chat_history: List[Dict[str, str]]) -> Tuple[str, bool, str]:
+    def get_chat_response(self, chat_history: List[Dict[str, str]]) -> Tuple[str, bool, str, str]:
         """메인 에이전트를 호출하여 사용자와 대화를 이어가며 기획을 정교화함"""
         system_instruction = (
             "당신은 AI 웹 빌더 서비스의 메인 기획 에이전트입니다. "
             "사용자와 대화하며 사용자가 원하는 웹사이트의 기획(목적, 구조, 디자인 레이아웃, 컬러 테마, 주요 섹션 및 기능 등)을 명확하게 다듬는 역할을 합니다. "
             "한 번에 1~2개씩 질문을 던져 사용자의 답변을 유도하고, 친절하고 전문적인 웹 기획자의 태도를 유지하세요. "
-            "요구사항이 모두 정리되었다고 판단되면, 사용자의 별도 동의를 구하지 않고 즉시 mark_planning_complete 함수를 호출하여 기획 사양 요약을 제출하십시오. "
+            "사용자가 대화 중에 특정 프레임워크(예: 리액트/React/react, 뷰/Vue/vue 등)로 작성해달라고 명시적으로 요청했는지 주의 깊게 파악하십시오. "
+            "요구사항이 모두 정리되었다고 판단되면, 사용자의 별도 동의를 구하지 않고 즉시 mark_planning_complete 함수를 호출하여 기획 사양 요약(summary) 및 결정된 프레임워크(framework)를 제출하십시오. "
+            "명시적인 프레임워크 요구사항이 없다면 framework 인자에 기본값 'vanilla'를 그대로 넘겨주십시오. "
             "그리고 동시에 사용자에게는 기획이 완료되어 디자인 및 코드 생성을 시작하겠다는 마지막 안내 메시지를 출력하세요."
         )
 
@@ -199,11 +202,15 @@ class AgentOrchestrator:
             
             is_ready = False
             summary = ""
+            framework = "vanilla"
             if response.function_calls:
                 for call in response.function_calls:
                     if call.name == "mark_planning_complete":
                         is_ready = True
                         summary = call.args.get("summary", "")
+                        framework = call.args.get("framework", "vanilla")
+                        if framework not in ["vanilla", "react", "vue"]:
+                            framework = "vanilla"
                         break
             
             reply = response.text
@@ -213,9 +220,9 @@ class AgentOrchestrator:
                 else:
                     reply = "대답을 생성하는 데 실패했습니다. 다시 말씀해 주세요."
                     
-            return reply, is_ready, summary
+            return reply, is_ready, summary, framework
         except Exception as e:
-            return f"채팅 모델 호출 중 오류가 발생했습니다: {str(e)}", False, ""
+            return f"채팅 모델 호출 중 오류가 발생했습니다: {str(e)}", False, "", "vanilla"
 
     def generate_design(self, summary: str, framework: str = "vanilla") -> dict:
         """디자인 에이전트를 호출하여 가상 소스코드 파일 및 iframe용 프리뷰 HTML을 마크다운 포맷으로 안정적으로 작성"""
