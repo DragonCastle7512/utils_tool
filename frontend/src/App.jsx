@@ -163,7 +163,6 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
-          framework: framework,
           image_data: imageObj ? imageObj.base64 : null,
           mime_type: imageObj ? imageObj.type : null
         })
@@ -214,8 +213,6 @@ export default function App() {
           messages={messages}
           onSendMessage={handleSendMessage}
           loading={loading}
-          framework={framework}
-          onChangeFramework={setFramework}
         />
 
         {/* 우측: 실시간 웹 프리뷰 및 소스코드 뷰어 */}

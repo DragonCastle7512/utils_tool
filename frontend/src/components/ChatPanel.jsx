@@ -5,9 +5,7 @@ export default function ChatPanel({
   session,
   messages,
   onSendMessage,
-  loading,
-  framework,
-  onChangeFramework
+  loading
 }) {
   const [input, setInput] = useState("");
   const [selectedImage, setSelectedImage] = useState(null); // { file, base64, type }
@@ -86,21 +84,6 @@ export default function ChatPanel({
                 : "웹사이트 구축 완료"}
             </span>
           </div>
-        </div>
-
-        {/* 프레임워크 선택 옵션 */}
-        <div className="framework-selector">
-          <label htmlFor="framework">대상 기술:</label>
-          <select
-            id="framework"
-            value={framework}
-            onChange={(e) => onChangeFramework(e.target.value)}
-            disabled={session.status === "DESIGNING"}
-          >
-            <option value="vanilla">HTML / CSS / JS (Vanilla)</option>
-            <option value="react">React (Vite App)</option>
-            <option value="vue">Vue 3 (SFC Layout)</option>
-          </select>
         </div>
       </header>
 
