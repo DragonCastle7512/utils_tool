@@ -37,7 +37,7 @@ def test_session_lifecycle():
 @patch("app.routers.sessions.orchestrator")
 def test_chat_interaction_not_ready(mock_orch):
     # 기획 미완료 상태 응답을 주도록 에이전트 모킹
-    mock_orch.get_chat_response.return_value = ("좋습니다! 선호하시는 메인 색상이 있으신가요?", False, "")
+    mock_orch.get_chat_response.return_value = ("좋습니다! 선호하시는 메인 색상이 있으신가요?", False, "", "vanilla")
     
     # 세션 생성
     create_resp = client.post("/api/sessions", json={"title": "내 홈페이지"})
@@ -72,7 +72,7 @@ def test_chat_interaction_not_ready(mock_orch):
 @patch("app.routers.sessions.orchestrator")
 def test_chat_interaction_triggers_design(mock_orch):
     # 기획 완료 상태 및 웹 디자인 생성을 진행하도록 에이전트 모킹
-    mock_orch.get_chat_response.return_value = ("요구사항이 명확히 수집되었습니다. 웹사이트 생성을 시작합니다!", True, "리액트 기반 핑크 테마 쇼핑몰")
+    mock_orch.get_chat_response.return_value = ("요구사항이 명확히 수집되었습니다. 웹사이트 생성을 시작합니다!", True, "리액트 기반 핑크 테마 쇼핑몰", "react")
     mock_orch.generate_design.return_value = {
         "framework": "react",
         "files": [
@@ -112,7 +112,7 @@ def test_chat_interaction_triggers_design(mock_orch):
 
 @patch("app.routers.sessions.orchestrator")
 def test_chat_with_image(mock_orch):
-    mock_orch.get_chat_response.return_value = ("이미지를 확인했습니다.", False, "")
+    mock_orch.get_chat_response.return_value = ("이미지를 확인했습니다.", False, "", "vanilla")
     
     create_resp = client.post("/api/sessions", json={"title": "이미지 인식 세션"})
     sess_id = create_resp.json()["session_id"]

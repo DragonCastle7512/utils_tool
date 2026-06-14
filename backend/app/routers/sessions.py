@@ -133,8 +133,8 @@ def chat(session_id: str, req: ChatReq, background_tasks: BackgroundTasks, db: D
     # 2. 전체 대화 기록 컨텍스트 조회
     history = db.get_chat_history(session_id)
 
-    # 3. 메인 에이전트(기획)를 호출하여 답변 및 기획 완료 여부 확인
-    reply, is_ready, summary = orchestrator.get_chat_response(history)
+    # 3. 메인 에이전트(기획)를 호출하여 답변 및 기획 완료 여부, 그리고 자동 판별된 프레임워크 확인
+    reply, is_ready, summary, detected_framework = orchestrator.get_chat_response(history)
     db.save_chat(session_id, "assistant", reply)
 
     if is_ready:
@@ -143,7 +143,7 @@ def chat(session_id: str, req: ChatReq, background_tasks: BackgroundTasks, db: D
         db.update_progress_message(session_id, "디자인 에이전트 가동을 준비 중입니다...")
 
         # 백그라운드 태스크 등록
-        background_tasks.add_task(generate_and_review_design_task, session_id, summary, req.framework, db.db.name)
+        background_tasks.add_task(generate_and_review_design_task, session_id, summary, detected_framework, db.db.name)
     else:
         # 기획 미완료 상태인 경우 상태를 'CLARIFYING'으로 유지
         db.update_session_status(session_id, "CLARIFYING")
