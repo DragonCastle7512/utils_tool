@@ -81,7 +81,7 @@ def test_chat_interaction_triggers_design(mock_orch):
         "preview_html": "<h1>핑크 쇼핑몰 메인</h1>",
         "summary": "러블리 핑크 쇼핑몰 코드"
     }
-    mock_orch.review_and_correct_design.side_effect = lambda initial_design, summary: initial_design
+    mock_orch.review_and_correct_design.side_effect = lambda initial_design, summary, *args, **kwargs: initial_design
     
     # 세션 생성
     create_resp = client.post("/api/sessions", json={"title": "화장품 웹숍"})

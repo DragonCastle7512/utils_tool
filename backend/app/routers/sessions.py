@@ -84,13 +84,16 @@ def list_sessions(db: DatabaseHelper = Depends(get_db)):
 def generate_and_review_design_task(session_id: str, summary: str, framework: str, db_name: str = "util_tools"):
     db = DatabaseHelper(db_name=db_name)
     try:
+        # 기존 디자인 소스 코드가 있는지 조회
+        existing_designs = db.get_designs(session_id)
+        previous_design = existing_designs[-1] if existing_designs else None
+
         db.update_progress_message(session_id, "디자인 에이전트가 1차 코드를 작성 중입니다...")
-        initial_design = orchestrator.generate_design(summary, framework)
+        initial_design = orchestrator.generate_design(summary, framework, previous_design)
         
         db.update_progress_message(session_id, "검토 에이전트가 소스코드를 리팩토링 및 검수 중입니다...")
-        generated_design = orchestrator.review_and_correct_design(initial_design, summary)
+        generated_design = orchestrator.review_and_correct_design(initial_design, summary, previous_design)
         
-        existing_designs = db.get_designs(session_id)
         next_version = len(existing_designs) + 1
         db.save_design(
             session_id=session_id,
