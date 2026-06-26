@@ -1,4 +1,3 @@
-import React from "react";
 
 // 사이드바 컴포넌트: 유틸리티 서비스 선택 및 대화 세션 목록 관리
 export default function Sidebar({
@@ -6,7 +5,9 @@ export default function Sidebar({
   activeSessionId,
   onSelectSession,
   onCreateSession,
-  loading
+  loading,
+  activeService = "builder",
+  onChangeService
 }) {
   return (
     <aside className="sidebar">
@@ -28,7 +29,10 @@ export default function Sidebar({
       <div className="sidebar-menu-section">
         <h3 className="menu-title">유틸리티 서비스</h3>
         <ul className="menu-list">
-          <li className="menu-item active">
+          <li
+            className={`menu-item ${activeService === "builder" ? "active" : ""}`}
+            onClick={() => onChangeService && onChangeService("builder")}
+          >
             <svg
               className="menu-icon"
               viewBox="0 0 24 24"
@@ -40,6 +44,23 @@ export default function Sidebar({
               <line x1="9" y1="3" x2="9" y2="21" />
             </svg>
             <span>AI 웹사이트 빌더</span>
+          </li>
+          <li
+            className={`menu-item ${activeService === "random-string" ? "active" : ""}`}
+            onClick={() => onChangeService && onChangeService("random-string")}
+          >
+            <svg
+              className="menu-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <rect x="3" y="11" width="18" height="10" rx="2" />
+              <circle cx="12" cy="5" r="2" />
+              <path d="M12 7v4M8 15h8" />
+            </svg>
+            <span>랜덤 문자열 생성기</span>
           </li>
         </ul>
       </div>
