@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 
 // 대화형 기획 채팅 패널 컴포넌트
 export default function ChatPanel({

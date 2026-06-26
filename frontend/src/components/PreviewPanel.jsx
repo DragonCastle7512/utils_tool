@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 
 // 웹사이트 프리뷰 및 코드 조회 패널 컴포넌트
 export default function PreviewPanel({ design, loading, progressMessage }) {

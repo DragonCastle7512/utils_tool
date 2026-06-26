@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from "react";
+/* eslint-disable no-unused-vars, react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+import { useState, useEffect } from "react";
 import Sidebar from "./components/Sidebar";
 import ChatPanel from "./components/ChatPanel";
 import PreviewPanel from "./components/PreviewPanel";
+import RandomStringGenerator from "./components/RandomStringGenerator";
 import "./App.css";
 
 const API_BASE = "http://localhost:8000";
@@ -12,6 +14,7 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [activeDesign, setActiveDesign] = useState(null);
   const [framework, setFramework] = useState("vanilla");
+  const [activeService, setActiveService] = useState("builder");
   
   const [loading, setLoading] = useState(false);
   const [sidebarLoading, setSidebarLoading] = useState(false);
@@ -75,7 +78,7 @@ export default function App() {
   }, [activeSessionId, activeSession?.status]);
 
   // 세션 목록 API 호출
-  const fetchSessions = async () => {
+  async function fetchSessions() {
     try {
       const res = await fetch(`${API_BASE}/api/sessions`);
       if (res.ok) {
@@ -92,7 +95,7 @@ export default function App() {
   };
 
   // 특정 세션의 대화 내역 및 소스코드 조회
-  const fetchSessionDetails = async (sessionId) => {
+  async function fetchSessionDetails(sessionId) {
     try {
       // 1. 대화 내역 조회
       const historyRes = await fetch(`${API_BASE}/api/sessions/${sessionId}/history`);
@@ -203,24 +206,32 @@ export default function App() {
         onSelectSession={setActiveSessionId}
         onCreateSession={handleCreateSession}
         loading={sidebarLoading}
+        activeService={activeService}
+        onChangeService={setActiveService}
       />
 
       {/* 중앙/우측 콘텐츠 스플릿 레이아웃 */}
       <main className="main-content">
-        {/* 중앙: 대화 기획 채팅창 */}
-        <ChatPanel
-          session={activeSession}
-          messages={messages}
-          onSendMessage={handleSendMessage}
-          loading={loading}
-        />
+        {activeService === "builder" ? (
+          <>
+            {/* 중앙: 대화 기획 채팅창 */}
+            <ChatPanel
+              session={activeSession}
+              messages={messages}
+              onSendMessage={handleSendMessage}
+              loading={loading}
+            />
 
-        {/* 우측: 실시간 웹 프리뷰 및 소스코드 뷰어 */}
-        <PreviewPanel
-          design={activeDesign}
-          loading={activeSession?.status === "DESIGNING"}
-          progressMessage={progressMessage}
-        />
+            {/* 우측: 실시간 웹 프리뷰 및 소스코드 뷰어 */}
+            <PreviewPanel
+              design={activeDesign}
+              loading={activeSession?.status === "DESIGNING"}
+              progressMessage={progressMessage}
+            />
+          </>
+        ) : (
+          <RandomStringGenerator />
+        )}
       </main>
     </div>
   );
